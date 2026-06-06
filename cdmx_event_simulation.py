@@ -5,14 +5,17 @@ CDMX Event Simulation - Streamlit Dashboard
 Complete visualization system for mass event simulation with environmental impact analysis
 """
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
+import base64
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional
 import json
+
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit as st
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -438,7 +441,7 @@ def create_cdmx_map(day_data: Dict, day: int, event_location: Optional[Dict] = N
         showlegend=True
     )
     
-    return fig
+    return style_plotly_figure(fig, height=600, title=f"Mapa CDMX - Día {day}")
     
 
 def create_waste_chart(temporal_data: Dict) -> go.Figure:
@@ -472,7 +475,7 @@ def create_waste_chart(temporal_data: Dict) -> go.Figure:
         height=400
     )
     
-    return fig
+    return style_plotly_figure(fig, height=400, title='Generación de Residuos por Tipo')
 
 def create_emissions_chart(temporal_data: Dict) -> go.Figure:
     """Create emissions timeline chart"""
@@ -503,7 +506,7 @@ def create_emissions_chart(temporal_data: Dict) -> go.Figure:
         height=400
     )
     
-    return fig
+    return style_plotly_figure(fig, height=400, title='Emisiones de CO2 en el Tiempo')
 
 def create_density_heatmap(temporal_data: Dict) -> go.Figure:
     """Create density heatmap across zones and time"""
@@ -541,7 +544,7 @@ def create_density_heatmap(temporal_data: Dict) -> go.Figure:
         height=400
     )
     
-    return fig
+    return style_plotly_figure(fig, height=400, title='Mapa de Calor: Densidad por Zona y Tiempo')
 
 def create_critical_points_table(critical_points: List[Dict]) -> pd.DataFrame:
     """Create critical points summary table"""
@@ -572,17 +575,455 @@ def create_transport_pie(attendees_df: pd.DataFrame) -> go.Figure:
         height=400
     )
     
+    return style_plotly_figure(fig, height=400, title='Distribución de Modos de Transporte')
+
+
+def load_brand_logo() -> str:
+    """Return the project logo as a base64 data URL."""
+    logo_path = Path(__file__).resolve().parent / "src" / "imports" / "CirclData_CDMX.png"
+    if not logo_path.exists():
+        return ""
+
+    encoded_logo = base64.b64encode(logo_path.read_bytes()).decode("utf-8")
+    return f"data:image/png;base64,{encoded_logo}"
+
+
+def style_plotly_figure(fig: go.Figure, height: int = 400, title: Optional[str] = None) -> go.Figure:
+    """Apply a soft light theme that matches the dashboard cards."""
+    fig.update_layout(
+        template="plotly_white",
+        height=height,
+        title_text=title or fig.layout.title.text,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#334155", family="Inter, system-ui, sans-serif"),
+        margin=dict(l=24, r=24, t=64, b=20),
+        title_font=dict(size=18, color="#334155"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    fig.update_xaxes(gridcolor="rgba(148, 163, 184, 0.22)", zeroline=False)
+    fig.update_yaxes(gridcolor="rgba(148, 163, 184, 0.22)", zeroline=False)
     return fig
+
+
+def inject_dashboard_styles() -> None:
+    """Apply a custom visual system for the Streamlit dashboard."""
+    st.markdown(
+        """
+        <style>
+            :root {
+                --bg: #f5fbf8;
+                --bg-soft: #edf7f2;
+                --panel: rgba(255, 255, 255, 0.94);
+                --panel-border: rgba(148, 163, 184, 0.16);
+                --text: #243248;
+                --muted: #64748b;
+                --accent: #10a36d;
+                --accent-2: #3274ff;
+                --accent-3: #ff9f1a;
+                --danger: #ff6b6b;
+                --radius-xl: 30px;
+                --radius-lg: 24px;
+                --shadow-lg: 0 18px 45px rgba(15, 23, 42, 0.10);
+            }
+
+            .stApp {
+                background:
+                    radial-gradient(circle at top left, rgba(16, 163, 109, 0.10), transparent 26%),
+                    radial-gradient(circle at right top, rgba(50, 116, 255, 0.09), transparent 24%),
+                    linear-gradient(180deg, #f8fcfa 0%, #eef7f2 100%);
+                color: var(--text);
+                font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            }
+
+            .stApp::before {
+                content: '';
+                position: fixed;
+                inset: 0;
+                pointer-events: none;
+                background-image:
+                    linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
+                background-size: 88px 88px;
+                mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.10));
+            }
+
+            [data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, footer {
+                visibility: hidden;
+                height: 0;
+            }
+
+            section.main > div {
+                padding-top: 0.8rem;
+            }
+
+            .block-container {
+                max-width: 1260px;
+                padding-top: 0.6rem;
+                padding-bottom: 2.5rem;
+            }
+
+            [data-testid="stSidebar"] {
+                background: rgba(255, 255, 255, 0.96);
+                border-right: 1px solid rgba(148, 163, 184, 0.16);
+                box-shadow: 12px 0 30px rgba(15, 23, 42, 0.06);
+            }
+
+            [data-testid="stSidebar"] > div {
+                padding-top: 1.4rem;
+            }
+
+            [data-testid="stSidebar"] .stSelectbox,
+            [data-testid="stSidebar"] .stNumberInput,
+            [data-testid="stSidebar"] .stButton,
+            [data-testid="stSidebar"] .stInfo {
+                background: rgba(255, 255, 255, 0.9);
+            }
+
+            [data-testid="stSidebar"] label,
+            [data-testid="stSidebar"] p,
+            [data-testid="stSidebar"] span {
+                color: var(--text) !important;
+            }
+
+            [data-testid="stSidebar"] div[data-baseweb="select"] > div,
+            [data-testid="stSidebar"] div[data-baseweb="select"] [role="combobox"],
+            [data-testid="stSidebar"] div[data-baseweb="input"] > div,
+            [data-testid="stSidebar"] input,
+            [data-testid="stSidebar"] textarea {
+                background: rgba(255, 255, 255, 0.98) !important;
+                color: #243248 !important;
+                border-radius: 18px !important;
+            }
+
+            [data-testid="stSidebar"] div[data-baseweb="select"] > div,
+            [data-testid="stSidebar"] div[data-baseweb="input"] > div {
+                border: 1px solid rgba(203, 213, 225, 0.95) !important;
+                box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+            }
+
+            [data-testid="stSidebar"] div[data-baseweb="select"] svg,
+            [data-testid="stSidebar"] div[data-baseweb="input"] svg,
+            [data-testid="stSidebar"] button svg {
+                color: #64748b !important;
+            }
+
+            [data-testid="stSidebar"] div[data-baseweb="select"] [role="combobox"]:focus,
+            [data-testid="stSidebar"] div[data-baseweb="input"]:focus-within,
+            [data-testid="stSidebar"] input:focus,
+            [data-testid="stSidebar"] textarea:focus {
+                border-color: rgba(16, 163, 109, 0.55) !important;
+                box-shadow: 0 0 0 4px rgba(16, 163, 109, 0.10) !important;
+                outline: none !important;
+            }
+
+            [data-testid="stSidebar"] .stButton > button {
+                width: 100%;
+            }
+
+            .top-nav {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 1rem;
+                padding: 0.9rem 1.1rem;
+                margin-bottom: 1.2rem;
+                border-radius: 26px;
+                background: rgba(255, 255, 255, 0.86);
+                border: 1px solid rgba(226, 232, 240, 0.92);
+                box-shadow: var(--shadow-lg);
+                backdrop-filter: blur(18px);
+            }
+
+            .top-brand {
+                display: flex;
+                align-items: center;
+                gap: 0.85rem;
+            }
+
+            .top-brand img {
+                height: 2.9rem;
+                width: auto;
+            }
+
+            .top-copy {
+                display: flex;
+                flex-direction: column;
+                line-height: 1.15;
+            }
+
+            .top-copy strong {
+                font-size: 0.98rem;
+                color: var(--text);
+            }
+
+            .top-copy span {
+                font-size: 0.75rem;
+                color: var(--muted);
+            }
+
+            .top-menu {
+                width: 44px;
+                height: 44px;
+                border-radius: 14px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                color: #334155;
+                background: rgba(15, 23, 42, 0.02);
+                box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.10);
+                font-size: 1.5rem;
+                font-weight: 700;
+            }
+
+            .hero-card {
+                border: 1px solid rgba(226, 232, 240, 0.98);
+                border-radius: var(--radius-xl);
+                background: linear-gradient(180deg, rgba(244, 252, 248, 0.96), rgba(240, 248, 244, 0.96));
+                box-shadow: var(--shadow-lg);
+                padding: 2rem 1.5rem 1.8rem;
+                margin-bottom: 1.2rem;
+                position: relative;
+                overflow: hidden;
+                text-align: center;
+            }
+
+            .hero-card::after {
+                content: '';
+                position: absolute;
+                inset: -2.5rem auto auto 50%;
+                transform: translateX(-50%);
+                width: 18rem;
+                height: 18rem;
+                border-radius: 50%;
+                background: radial-gradient(circle, rgba(16, 163, 109, 0.14), transparent 62%);
+                filter: blur(6px);
+                pointer-events: none;
+            }
+
+            .hero-kicker {
+                letter-spacing: 0.18em;
+                text-transform: uppercase;
+                color: var(--accent);
+                font-size: 0.72rem;
+                font-weight: 700;
+                margin-bottom: 0.8rem;
+            }
+
+            .hero-title {
+                font-size: clamp(1.8rem, 3.6vw, 3rem);
+                line-height: 1.06;
+                font-weight: 700;
+                color: #3b4e6b;
+                margin: 0;
+            }
+
+            .hero-subtitle {
+                margin-top: 0.75rem;
+                color: var(--muted);
+                font-size: 1rem;
+                max-width: 72ch;
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .hero-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.6rem;
+                margin-top: 1.2rem;
+                justify-content: center;
+            }
+
+            .hero-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+                border: 1px solid rgba(148, 163, 184, 0.16);
+                background: rgba(255, 255, 255, 0.96);
+                color: #475569;
+                border-radius: 999px;
+                padding: 0.45rem 0.8rem;
+                font-size: 0.82rem;
+                box-shadow: 0 10px 20px rgba(15, 23, 42, 0.06);
+            }
+
+            .section-label {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                color: #25344c;
+                font-size: 1.55rem;
+                font-weight: 600;
+                margin: 0 0 0.35rem 0;
+            }
+
+            .section-label::before {
+                content: '';
+                width: 14px;
+                height: 14px;
+                border-radius: 6px;
+                display: inline-block;
+                background: linear-gradient(135deg, rgba(16, 163, 109, 0.96), rgba(50, 116, 255, 0.9));
+                box-shadow: 0 0 0 6px rgba(16, 163, 109, 0.10);
+            }
+
+            .section-panel {
+                margin-bottom: 1rem;
+            }
+
+            .section-subtitle {
+                color: var(--muted);
+                font-size: 0.96rem;
+                line-height: 1.6;
+                margin-bottom: 0.7rem;
+            }
+
+            div[data-testid="metric-container"] {
+                border: 1px solid rgba(226, 232, 240, 0.98);
+                border-radius: 22px;
+                background: rgba(255, 255, 255, 0.96);
+                padding: 1rem 1rem 0.8rem;
+                box-shadow: 0 14px 30px rgba(15, 23, 42, 0.07);
+            }
+
+            div[data-testid="metric-container"] label {
+                color: var(--muted) !important;
+                font-size: 0.8rem !important;
+            }
+
+            div[data-testid="metric-container"] [data-testid="stMetricValue"] {
+                color: #25344c;
+                font-size: 2rem;
+                font-weight: 800;
+            }
+
+            .stButton > button,
+            .stDownloadButton > button {
+                border-radius: 18px !important;
+                border: 1px solid rgba(16, 163, 109, 0.22) !important;
+                background: linear-gradient(135deg, #17c58c, #0fa56f) !important;
+                color: white !important;
+                font-weight: 700 !important;
+                box-shadow: 0 18px 36px rgba(16, 163, 109, 0.18);
+            }
+
+            .stButton > button:hover,
+            .stDownloadButton > button:hover {
+                transform: translateY(-1px);
+                border-color: rgba(16, 163, 109, 0.45) !important;
+            }
+
+            .stSelectbox label,
+            .stNumberInput label,
+            .stMarkdown,
+            .stSidebar label {
+                color: var(--text);
+            }
+
+            [data-testid="stTabs"] button {
+                border-radius: 999px;
+                color: #475569;
+            }
+
+            [data-baseweb="tab-list"] {
+                gap: 0.45rem;
+            }
+
+            [data-baseweb="tab"] {
+                background: rgba(255, 255, 255, 0.92);
+                border: 1px solid rgba(226, 232, 240, 1);
+                border-radius: 999px;
+                padding: 0.7rem 1rem;
+                box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
+            }
+
+            [data-baseweb="tab"]:hover {
+                background: rgba(240, 247, 244, 0.98);
+            }
+
+            [aria-selected="true"][data-baseweb="tab"] {
+                background: rgba(16, 163, 109, 0.12);
+                border-color: rgba(16, 163, 109, 0.28);
+                color: #0f7e55;
+            }
+
+            .stAlert {
+                border-radius: 22px;
+            }
+
+            [data-testid="stAlert"] {
+                border: 1px solid rgba(191, 219, 254, 0.85) !important;
+                background: linear-gradient(180deg, rgba(239, 246, 255, 0.95), rgba(224, 242, 254, 0.95)) !important;
+                color: #1e3a5f !important;
+                border-radius: 22px !important;
+                box-shadow: 0 12px 28px rgba(37, 99, 235, 0.08) !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_hero_section(selected_venue: Dict, n_attendees: int) -> None:
+    """Render the dashboard hero and context chips."""
+    venue_type = "Evento masivo"
+    if selected_venue['name'] == AUTODROMO_HERMANOS_RODRIGUEZ['name']:
+        venue_type = "Circuito urbano"
+
+    logo_data = load_brand_logo()
+    logo_html = f'<img src="{logo_data}" alt="CirclData CDMX" />' if logo_data else "<div></div>"
+
+    st.markdown(
+        f"""
+        <div class="top-nav">
+            <div class="top-brand">
+                {logo_html}
+                <div class="top-copy">
+                    <strong>CirclData CDMX</strong>
+                    <span>Inteligencia para la Economía Circular</span>
+                </div>
+            </div>
+            <div class="top-menu">☰</div>
+        </div>
+        <div class="hero-card">
+            <div class="hero-kicker">Sistema Inteligente de Gestión de Residuos - Mundial 2026</div>
+            <h1 class="hero-title">Diseño ejecutivo para el monitoreo de impacto urbano</h1>
+            <div class="hero-subtitle">
+                Visualización en Streamlit para simular aforo, residuos, emisiones y puntos críticos en Ciudad de México,
+                conservando las gráficas analíticas existentes.
+            </div>
+            <div class="hero-meta">
+                <span class="hero-chip">🏟️ {selected_venue['name']}</span>
+                <span class="hero-chip">👥 {n_attendees:,} asistentes</span>
+                <span class="hero-chip">📍 {venue_type}</span>
+                <span class="hero-chip">🛰️ CDMX / movilidad / ambiente</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_section_label(title: str, subtitle: str = "") -> None:
+    """Render a styled section intro."""
+    subtitle_html = f'<div class="section-subtitle">{subtitle}</div>' if subtitle else ""
+    st.markdown(
+        f"""
+        <div class="section-panel">
+            <div class="section-label">{title}</div>
+            {subtitle_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ============================================================================
 # MAIN STREAMLIT APP
 # ============================================================================
 
 def main():
-    # Header
-    st.title("🏟️ Simulación de Evento Masivo - Ciudad de México")
-    st.markdown("### Análisis de Impacto Ambiental y Movilidad")
-    st.markdown("---")
+    inject_dashboard_styles()
     
     # Sidebar configuration
     st.sidebar.header("⚙️ Configuración de Simulación")
@@ -672,9 +1113,14 @@ def main():
         attendees = st.session_state['attendees']
         n_attendees = st.session_state['n_attendees']
         selected_venue = st.session_state.get('selected_venue', ESTADIO_AZTECA)
+
+        render_hero_section(selected_venue, n_attendees)
         
         # Summary metrics
-        st.header("📊 Métricas Generales")
+        render_section_label(
+            "Métricas generales",
+            "Resumen ejecutivo del comportamiento simulado antes de entrar a las visualizaciones por día."
+        )
         
         col1, col2, col3, col4 = st.columns(4)
         
@@ -692,10 +1138,11 @@ def main():
                               if cp['severity'] == 'high')
             st.metric("Zonas Críticas", critical_high)
         
-        st.markdown("---")
-        
         # Temporal visualization tabs
-        st.header("🗓️ Visualización Temporal")
+        render_section_label(
+            "Visualización temporal",
+            "Explora la evolución del evento y su impacto sobre la ciudad en cada periodo analizado."
+        )
         
         tab0, tab1, tab3, tab7 = st.tabs(["📅 Día del Evento", "📅 Día +1", "📅 Día +3", "📅 Día +7"])
         
@@ -747,10 +1194,11 @@ def main():
                     hide_index=True
                 )
         
-        st.markdown("---")
-        
         # Comparative analysis
-        st.header("📈 Análisis Comparativo")
+        render_section_label(
+            "Análisis comparativo",
+            "La relación entre residuos, emisiones, movilidad y densidad queda agrupada para lectura de dirección."
+        )
         
         col1, col2 = st.columns(2)
         
@@ -768,10 +1216,11 @@ def main():
         with col4:
             st.plotly_chart(create_density_heatmap(results), use_container_width=True)
         
-        st.markdown("---")
-        
         # Download results
-        st.header("💾 Exportar Resultados")
+        render_section_label(
+            "Exportar resultados",
+            "Descarga el dataset base y el resumen ambiental sin salir del entorno de simulación."
+        )
         
         # Exportar a CSV (Los asistentes)
         csv_data = attendees.to_csv(index=False).encode('utf-8')
@@ -806,11 +1255,16 @@ def main():
         )
         
     else:
+        render_hero_section(selected_venue, n_attendees)
+
         # Welcome message
         st.info("👈 Configura los parámetros en la barra lateral y presiona '🚀 Ejecutar Simulación' para comenzar.")
         
         # Show example information
-        st.header("ℹ️ Acerca de esta Simulación")
+        render_section_label(
+            "Acerca de esta simulación",
+            "El simulador construye una población sintética, distribuye la asistencia y estima el impacto ambiental por periodo."
+        )
         
         st.markdown("""
         Esta aplicación simula eventos masivos en la Ciudad de México y analiza:
