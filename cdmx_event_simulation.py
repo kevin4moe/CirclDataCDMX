@@ -1,3 +1,5 @@
+# streamlit run graficas/cdmx_event_simulation.py
+
 """
 CDMX Event Simulation - Streamlit Dashboard
 Complete visualization system for mass event simulation with environmental impact analysis
@@ -9,7 +11,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import json
 
 # ============================================================================
@@ -27,7 +29,7 @@ st.set_page_config(
 # CONSTANTS AND CONFIGURATION
 # ============================================================================
 
-# Estadio Azteca coordinates
+# Event venues
 ESTADIO_AZTECA = {
     "name": "Estadio Azteca",
     "lat": 19.3029,
@@ -35,43 +37,30 @@ ESTADIO_AZTECA = {
     "capacity": 87000
 }
 
-# Strategic zones in CDMX
-STRATEGIC_ZONES = {
-    "zona_rosa": {
-        "name": "Zona Rosa",
-        "lat": 19.4284,
-        "lon": -99.1677,
-        "type": "entertainment",
-        "capacity": 15000
-    },
-    "centro_historico": {
-        "name": "Centro Histórico",
-        "lat": 19.4326,
-        "lon": -99.1332,
-        "type": "cultural",
-        "capacity": 20000
-    },
-    "polanco": {
-        "name": "Polanco",
-        "lat": 19.4363,
-        "lon": -99.1910,
-        "type": "commercial",
-        "capacity": 12000
-    },
-    "coyoacan": {
-        "name": "Coyoacán",
-        "lat": 19.3467,
-        "lon": -99.1618,
-        "type": "cultural",
-        "capacity": 10000
-    },
-    "santa_fe": {
-        "name": "Santa Fe",
-        "lat": 19.3595,
-        "lon": -99.2677,
-        "type": "commercial",
-        "capacity": 8000
-    }
+AUTODROMO_HERMANOS_RODRIGUEZ = {
+    "name": "Autódromo Hermanos Rodríguez",
+    "lat": 19.4042,
+    "lon": -99.0907,
+    "capacity": 135000
+}
+
+# Zonas específicas para Estadio Azteca (Enfoque Sur)
+ZONAS_AZTECA = {
+    "coyoacan": {"name": "Coyoacán Centro", "lat": 19.3467, "lon": -99.1618, "type": "cultural", "capacity": 15000},
+    "tlalpan": {"name": "Centro de Tlalpan", "lat": 19.2882, "lon": -99.1673, "type": "cultural", "capacity": 10000},
+    "xochimilco": {"name": "Xochimilco", "lat": 19.2546, "lon": -99.1036, "type": "cultural", "capacity": 12000},
+    "san_angel": {"name": "San Ángel", "lat": 19.3450, "lon": -99.1917, "type": "entertainment", "capacity": 8000},
+    "aeropuerto": {"name": "Zona Aeropuerto", "lat": 19.4361, "lon": -99.0719, "type": "commercial", "capacity": 10000}
+
+}
+
+# Zonas específicas para Autódromo (Enfoque Centro/Oriente)
+ZONAS_AUTODROMO = {
+    "centro_historico": {"name": "Centro Histórico", "lat": 19.4326, "lon": -99.1332, "type": "cultural", "capacity": 20000},
+    "zona_rosa": {"name": "Zona Rosa", "lat": 19.4284, "lon": -99.1677, "type": "entertainment", "capacity": 15000},
+    "polanco": {"name": "Polanco", "lat": 19.4363, "lon": -99.1910, "type": "commercial", "capacity": 12000},
+    "roma": {"name": "Roma Norte", "lat": 19.4196, "lon": -99.1625, "type": "entertainment", "capacity": 15000},
+    "condesa": {"name": "Condesa", "lat": 19.4147, "lon": -99.1730, "type": "entertainment", "capacity": 18000}
 }
 
 # CDMX boundaries
@@ -103,10 +92,11 @@ ZONE_TYPE_COLORS = {
 class PopulationGenerator:
     """Generate synthetic population for event simulation"""
     
-    def __init__(self, seed: int = 42):
+    def __init__(self, target_zones: Dict, seed: int = 42):
+        self.target_zones = target_zones
         np.random.seed(seed)
     
-    def generate_attendees(self, n_attendees: int = 5000) -> pd.DataFrame:
+    def generate_attendees(self, n_attendees: int = 8300) -> pd.DataFrame:
         """Generate synthetic attendees with realistic distribution"""
         attendees = []
         
@@ -137,10 +127,10 @@ class PopulationGenerator:
             home_lat = np.clip(home_lat, CDMX_BOUNDS['south'], CDMX_BOUNDS['north'])
             home_lon = np.clip(home_lon, CDMX_BOUNDS['west'], CDMX_BOUNDS['east'])
             
-            # Assign destination zone
-            zone_weights = [z['capacity'] for z in STRATEGIC_ZONES.values()]
+            # Assign destination zone dynamically
+            zone_weights = [z['capacity'] for z in self.target_zones.values()]
             zone_weights = np.array(zone_weights) / sum(zone_weights)
-            destination_zone = np.random.choice(list(STRATEGIC_ZONES.keys()), p=zone_weights)
+            destination_zone = np.random.choice(list(self.target_zones.keys()), p=zone_weights)
             
             # Transportation mode
             transport_mode = np.random.choice(
@@ -174,17 +164,17 @@ class PopulationGenerator:
 class EventSimulator:
     """Simulate event attendance and post-event behavior"""
     
-    def __init__(self, attendees_df: pd.DataFrame):
+    def __init__(self, attendees_df: pd.DataFrame, target_zones: Dict, event_location=None):
         self.attendees = attendees_df
-        self.event_location = ESTADIO_AZTECA
-        self.zones = STRATEGIC_ZONES
+        self.event_location = event_location if event_location else ESTADIO_AZTECA
+        self.zones = target_zones
     
     def simulate_event_day(self) -> Dict:
         """Simulate the event day (Day 0)"""
         return {
             'day': 0,
             'timestamp': datetime.now().isoformat(),
-            'location': 'Estadio Azteca',
+            'location': self.event_location['name'],
             'attendees_present': len(self.attendees),
             'concentration': {
                 'lat': self.event_location['lat'],
@@ -285,8 +275,7 @@ class EnvironmentalImpactCalculator:
                 mode_count = len(zone_attendees[
                     zone_attendees['transport_mode'] == transport_mode
                 ])
-                mode_emissions = (mode_count * avg_distance * 
-                                self.EMISSIONS_PER_KM[transport_mode])
+                mode_emissions = (mode_count * avg_distance * self.EMISSIONS_PER_KM[transport_mode])
                 total_emissions += mode_emissions
                 emissions_by_transport[transport_mode] = \
                     emissions_by_transport.get(transport_mode, 0) + mode_emissions
@@ -334,8 +323,10 @@ class EnvironmentalImpactCalculator:
 # VISUALIZATION FUNCTIONS
 # ============================================================================
 
-def create_cdmx_map(day_data: Dict, day: int) -> go.Figure:
+def create_cdmx_map(day_data: Dict, day: int, event_location: Optional[Dict] = None) -> go.Figure:
     """Create interactive map of CDMX with event data"""
+    if event_location is None:
+        event_location = ESTADIO_AZTECA
     fig = go.Figure()
     
     # Add CDMX boundary
@@ -355,9 +346,9 @@ def create_cdmx_map(day_data: Dict, day: int) -> go.Figure:
         total_asistentes = day_data['distribution']['attendees_present']
         n_puntos = min(total_asistentes, 2000) # Límite para rendimiento
         
-        # Generar distribución aleatoria alrededor del estadio
-        lats_multitud = np.random.normal(ESTADIO_AZTECA['lat'], 0.003, n_puntos)
-        lons_multitud = np.random.normal(ESTADIO_AZTECA['lon'], 0.003, n_puntos)
+        # Generar distribución aleatoria alrededor del estadio seleccionado
+        lats_multitud = np.random.normal(event_location['lat'], 0.003, n_puntos)
+        lons_multitud = np.random.normal(event_location['lon'], 0.003, n_puntos)
         
         # 1. Capa de la multitud
         fig.add_trace(go.Scattermapbox(
@@ -370,13 +361,13 @@ def create_cdmx_map(day_data: Dict, day: int) -> go.Figure:
             showlegend=False
         ))
         
-        # 2. Capa del Estadio Azteca
+        # 2. Capa del Venue del Evento
         fig.add_trace(go.Scattermapbox(
-            lat=[ESTADIO_AZTECA['lat']],
-            lon=[ESTADIO_AZTECA['lon']],
+            lat=[event_location['lat']],
+            lon=[event_location['lon']],
             mode='markers+text',
             marker=dict(size=25, color='gold', symbol='star', opacity=1.0),
-            text=[ESTADIO_AZTECA['name']],
+            text=[event_location['name']],
             textposition='top center',
             name='Evento Principal',
             hovertemplate='<b>%{text}</b><br>Asistentes Totales: ' +
@@ -429,8 +420,8 @@ def create_cdmx_map(day_data: Dict, day: int) -> go.Figure:
     
     # === LÓGICA DINÁMICA DE CÁMARA ===
     if day == 0:
-        map_center = dict(lat=ESTADIO_AZTECA['lat'], lon=ESTADIO_AZTECA['lon'])
-        map_zoom = 16.5
+        map_center = dict(lat=event_location['lat'], lon=event_location['lon'])
+        map_zoom = 15.5
     else:
         map_center = dict(lat=19.4326, lon=-99.1332)
         map_zoom = 10.5
@@ -523,7 +514,6 @@ def create_density_heatmap(temporal_data: Dict) -> go.Figure:
     for day in [0, 1, 3, 7]:
         day_key = f'day_{day}'
         if day > 0:
-            # CORRECCIÓN: Acceder a 'zones' a través de 'distribution'
             for zone_id, zone_info in temporal_data[day_key]['distribution']['zones'].items():
                 zones.append(zone_info['name'])
                 days.append(f"Día {day}")
@@ -565,6 +555,7 @@ def create_critical_points_table(critical_points: List[Dict]) -> pd.DataFrame:
             'Residuos (kg)': point['estimated_waste_kg']
         })
     return pd.DataFrame(data)
+
 def create_transport_pie(attendees_df: pd.DataFrame) -> go.Figure:
     """Create transportation mode distribution pie chart"""
     transport_counts = attendees_df['transport_mode'].value_counts()
@@ -582,6 +573,7 @@ def create_transport_pie(attendees_df: pd.DataFrame) -> go.Figure:
     )
     
     return fig
+
 # ============================================================================
 # MAIN STREAMLIT APP
 # ============================================================================
@@ -595,13 +587,23 @@ def main():
     # Sidebar configuration
     st.sidebar.header("⚙️ Configuración de Simulación")
     
-    n_attendees = st.sidebar.slider(
-        "Número de Asistentes",
-        min_value=1000,
-        max_value=50000,
-        value=5000,
-        step=1000
+    # Event venue selection
+    venue_option = st.sidebar.selectbox(
+        "Seleccionar Venue",
+        ["Estadio Azteca (5000 personas)", "Autódromo Hermanos Rodríguez (7500 personas)"]
     )
+    
+    # Set attendees and venue based on selection
+    if "Autódromo" in venue_option:
+        n_attendees = 7500
+        selected_venue = AUTODROMO_HERMANOS_RODRIGUEZ
+        selected_zones = ZONAS_AUTODROMO
+    else:
+        n_attendees = 5000
+        selected_venue = ESTADIO_AZTECA
+        selected_zones = ZONAS_AZTECA
+    
+    st.sidebar.info(f"📍 Venue: {selected_venue['name']}\n👥 Asistentes: {n_attendees:,}")
     
     seed = st.sidebar.number_input(
         "Semilla Aleatoria",
@@ -613,11 +615,11 @@ def main():
     if st.sidebar.button("🚀 Ejecutar Simulación", type="primary"):
         with st.spinner("Generando población sintética..."):
             # Generate population
-            pop_gen = PopulationGenerator(seed=seed)
+            pop_gen = PopulationGenerator(target_zones=selected_zones, seed=seed)
             attendees = pop_gen.generate_attendees(n_attendees)
             
-            # Initialize simulator
-            simulator = EventSimulator(attendees)
+            # Initialize simulator with selected venue
+            simulator = EventSimulator(attendees, target_zones=selected_zones, event_location=selected_venue)
             impact_calc = EnvironmentalImpactCalculator(attendees)
             
             # Run simulation for all days
@@ -639,10 +641,10 @@ def main():
                 else:
                     emissions = {'total_co2_kg': 0, 'by_transport': {}, 'cars_equivalent': 0}
                     critical_points = [{
-                        'zone_id': 'estadio_azteca',
-                        'zone_name': 'Estadio Azteca',
-                        'lat': ESTADIO_AZTECA['lat'],
-                        'lon': ESTADIO_AZTECA['lon'],
+                        'zone_id': 'event_venue',
+                        'zone_name': selected_venue['name'],
+                        'lat': selected_venue['lat'],
+                        'lon': selected_venue['lon'],
                         'severity': 'high',
                         'density': 1.0,
                         'estimated_waste_kg': waste['total_kg'],
@@ -650,16 +652,17 @@ def main():
                     }]
                 
                 simulation_results[f'day_{day}'] = {
-    'distribution': distribution,
-    'waste': waste,
-    'emissions': emissions,
-    'critical_points': critical_points
-}
+                    'distribution': distribution,
+                    'waste': waste,
+                    'emissions': emissions,
+                    'critical_points': critical_points
+                }
             
             # Store in session state
             st.session_state['simulation_results'] = simulation_results
             st.session_state['attendees'] = attendees
             st.session_state['n_attendees'] = n_attendees
+            st.session_state['selected_venue'] = selected_venue
             
         st.sidebar.success("✅ Simulación completada!")
     
@@ -668,6 +671,7 @@ def main():
         results = st.session_state['simulation_results']
         attendees = st.session_state['attendees']
         n_attendees = st.session_state['n_attendees']
+        selected_venue = st.session_state.get('selected_venue', ESTADIO_AZTECA)
         
         # Summary metrics
         st.header("📊 Métricas Generales")
@@ -702,7 +706,7 @@ def main():
                 
                 # Map
                 st.subheader(f"Mapa de Distribución - Día {day}")
-                fig_map = create_cdmx_map(day_data, day)
+                fig_map = create_cdmx_map(day_data, day, event_location=selected_venue)
                 st.plotly_chart(fig_map, use_container_width=True)
                 
                 # Metrics for this day
@@ -769,6 +773,15 @@ def main():
         # Download results
         st.header("💾 Exportar Resultados")
         
+        # Exportar a CSV (Los asistentes)
+        csv_data = attendees.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Descargar Datos de Asistentes (CSV)",
+            data=csv_data,
+            file_name=f"asistentes_simulacion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
+        )
+        
         # Prepare JSON export
         export_data = {
             'metadata': {
@@ -786,7 +799,7 @@ def main():
         json_str = json.dumps(export_data, indent=2, ensure_ascii=False)
         
         st.download_button(
-            label="📥 Descargar Resultados (JSON)",
+            label="📥 Descargar Resultados Ambientales (JSON)",
             data=json_str,
             file_name=f"cdmx_simulation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
             mime="application/json"
@@ -800,21 +813,16 @@ def main():
         st.header("ℹ️ Acerca de esta Simulación")
         
         st.markdown("""
-        Esta aplicación simula un evento masivo en el **Estadio Azteca** y analiza:
+        Esta aplicación simula eventos masivos en la Ciudad de México y analiza:
         
         - 🏠 **Población Sintética**: Genera asistentes con ubicaciones realistas en CDMX
-        - 🏟️ **Evento Masivo**: Simula la concentración en el Estadio Azteca
-        - 🚶 **Desplazamiento Post-Evento**: Modela el movimiento hacia 5 zonas estratégicas
+        - 🏟️ **Eventos Masivos**: Simula concentraciones en diferentes venues
+          - **Estadio Azteca**: 5,000 personas
+          - **Autódromo Hermanos Rodríguez**: 7,500 personas
+        - 🚶 **Desplazamiento Post-Evento**: Modela el movimiento hacia zonas estratégicas dinámicas
         - ♻️ **Residuos**: Estima la generación de residuos por tipo
         - 🌍 **Emisiones**: Calcula emisiones de CO2 por modo de transporte
         - ⚠️ **Puntos Críticos**: Identifica zonas de alto impacto ambiental
-        
-        ### Zonas Estratégicas:
-        1. **Zona Rosa** - Entretenimiento
-        2. **Centro Histórico** - Cultural
-        3. **Polanco** - Comercial
-        4. **Coyoacán** - Cultural
-        5. **Santa Fe** - Comercial
         
         ### Períodos de Análisis:
         - **Día 0**: Día del evento
