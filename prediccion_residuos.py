@@ -359,28 +359,41 @@ def render_section_label(title: str, subtitle: str = "") -> None:
 # ============================================================================
 # LÓGICA DEL MODELO PREDICTIVO (HÍBRIDO ESTADÍSTICO)
 # ============================================================================
-def calcular_tonelaje_predicho(aforo, flotante, duracion, indice_comercio, lluvia_mm):
+def calcular_tonelaje_predicho(aforo, flotante, duracion, indice_comercio, lluvia_mm, tipo_evento):
     """
-    Simula un modelo lineal híbrido calibrado con parámetros del reporte:
-    - Escenario FIFA Azteca: 0.8 a 1.2 kg por asistente
-    - Sensibilidad adicional por población flotante, comercio informal y lluvia
+    Simula un modelo lineal híbrido calibrado con parámetros del reporte.
+    Ajusta dinámicamente el intercepto y los coeficientes según la agresividad del evento.
     """
-    beta_0 = 1800
-    
+    # 1. Ajuste de coeficientes según la naturaleza del evento
+    if tipo_evento == "Festival Musical / Concierto":
+        # Eventos con alto consumo, stands de comida y mercadotecnia libre
+        beta_0 = 3500 
+        base_coef_aforo = 0.80
+        multiplicador_duracion = 0.60
+    else: 
+        # "Partido Deportivo (Fútbol)" - Entorno más controlado
+        beta_0 = 1800
+        base_coef_aforo = 0.30
+        multiplicador_duracion = 0.40
+
+    # 2. Cálculo de basura interna escalada por la duración
     factor_duracion_interno = min(duracion / 6, 1.0)
-    coef_aforo = 0.80 + (0.40 * factor_duracion_interno)
+    coef_aforo = base_coef_aforo + (multiplicador_duracion * factor_duracion_interno)
     basura_interna = aforo * coef_aforo
     
+    # 3. Variables exógenas (Periferia, comercio y clima)
     coef_flotante = 0.22
     basura_flotante = flotante * coef_flotante
     
     basura_comercio = indice_comercio * 120
     basura_pluvial = lluvia_mm * 180
     
+    # 4. Sumatoria total
     total_kg = beta_0 + basura_interna + basura_flotante + basura_comercio + basura_pluvial
     toneladas_totales = total_kg / 1000
     
     return toneladas_totales, coef_aforo
+
 
 # ============================================================================
 # INTERFAZ DE USUARIO
@@ -397,6 +410,14 @@ def render_prediction_page():
     col1, col2 = st.columns([1, 1.2])
 
     with col1:
+        # Selector Dinámico de Tipo de Evento
+        tipo_evento = st.selectbox(
+            "Categoría del Evento",
+            ["Partido Deportivo (Fútbol)", "Festival Musical / Concierto"],
+            help="Los festivales musicales tienen una tasa de generación de residuos per cápita mucho más agresiva que los eventos deportivos."
+        )
+        st.markdown("---")
+
         aforo = st.number_input(
             "Aforo oficial efectivo",
             min_value=0,
@@ -449,16 +470,20 @@ def render_prediction_page():
             help="Del 100% de la basura generada, ¿cuánto lograremos separar antes de que llegue al camión de basura?"
         )
 
+        # Constantes del mercado de reciclaje
         costo_mitigacion_tonelada = 4000.00
         precio_aluminio_ton = 22000.00
         precio_carton_ton = 1500.00
         precio_pet_ton = 5000.00
 
     with col2:
-        toneladas, coef_real = calcular_tonelaje_predicho(aforo, flotante, duracion, indice_comercio, lluvia_mm)
+        # Ejecutar modelo enviando la variable tipo_evento
+        toneladas, coef_real = calcular_tonelaje_predicho(aforo, flotante, duracion, indice_comercio, lluvia_mm, tipo_evento)
+        
         toneladas_recuperadas = toneladas * (tasa_recuperacion / 100)
         toneladas_a_disposicion = toneladas - toneladas_recuperadas
 
+        # Distribución de volumen recuperado: 20% Aluminio, 60% Cartón, 20% PET
         toneladas_aluminio = toneladas_recuperadas * 0.20
         toneladas_carton = toneladas_recuperadas * 0.60
         toneladas_pet = toneladas_recuperadas * 0.20
@@ -478,6 +503,7 @@ def render_prediction_page():
             "La salida prioriza cifras críticas y una lectura rápida del impacto económico y ambiental."
         )
 
+        # Métricas principales
         m1, m2, m3 = st.columns(3)
         m1.metric(label="Generación bruta", value=f"{toneladas:,.1f} Ton", delta="Volumen total")
         m2.metric(
@@ -489,28 +515,24 @@ def render_prediction_page():
         m3.metric(
             label="Costo sin reciclar",
             value=f"${costo_sin_reciclar:,.2f}",
-            delta=f"Coef. aforo aplicado: {coef_real:.2f} kg/persona",
+            delta=f"Coef. aforo: {coef_real:.2f} kg/persona",
             delta_color="inverse",
         )
 
-        st.markdown(
-            f"""
-            <div class="hero-card" style="text-align:center; margin-top: 1rem;">
-                <div class="hero-kicker">Ingresos por Economía Circular</div>
-                <h2 class="hero-title" style="font-size: clamp(1.8rem, 3vw, 2.8rem); margin-top: 0.25rem;">${ingresos_totales:,.2f} MXN</h2>
-                <div class="hero-subtitle" style="margin-top: 0.65rem;">Valorización de Aluminio, Cartón y PET</div>
-                <div class="hero-meta">
-                    <span class="hero-chip">♻️ Recuperadas: {toneladas_recuperadas:,.1f} Ton</span>
-                    <span class="hero-chip">💸 Balance neto: ${balance_financiero_final:,.2f}</span>
-                    <span class="hero-chip">🏛️ Impuesto Pigouviano: ${impuesto_pigouviano:,.2f}</span>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        # Tarjeta HTML destacada para los Ingresos + Letras chiquitas
+        st.markdown(f"""
+        <div style="background-color: #f0fdf4; padding: 25px; border-radius: 12px; text-align: center; border: 2px solid #22c55e; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-top: 1rem;">
+            <h4 style="color: #166534; margin-bottom: 0px; font-weight: 600;">💰 Ingresos por Economía Circular</h4>
+            <h1 style="color: #15803d; font-size: 3.5rem; margin-top: 10px; margin-bottom: 10px;">${ingresos_totales:,.2f} MXN</h1>
+            <p style="color: #166534; font-size: 1.1rem; margin-bottom: 0px;">Valorización de Aluminio, Cartón y PET</p>
+        </div>
+        <p style="text-align: center; font-size: 0.85rem; color: #6b7280; margin-top: 8px;">
+            <i>* Se reciclaron exitosamente un total de <b>{toneladas_recuperadas:,.1f} toneladas</b> de residuos sólidos.</i>
+        </p>
+        """, unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-
+        
         st.markdown("**Desglose de materiales recuperados y proyección de ingresos:**")
         df_reciclaje = pd.DataFrame({
             "Material": ["Aluminio (Latas)", "Cartón/Papel", "PET (Botellas plásticas)", "Total Ingresos"],
